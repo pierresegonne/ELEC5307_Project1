@@ -3,16 +3,16 @@ this script is for reproducing the result of Part3 in Project 1.
 
 -------------------------------------------
 INTRO:
-You should write your codes or modify codes between the 
-two '#####' lines. The codes between two '=======' lines 
+You should write your codes or modify codes between the
+two '#####' lines. The codes between two '=======' lines
 are used for logging or printing, please do not change.
 
-You need to debug and run your codes in somewhere else (e.g. Jupyter 
-Notebook). This file is only used for your submission and marks. 
+You need to debug and run your codes in somewhere else (e.g. Jupyter
+Notebook). This file is only used for your submission and marks.
 
-In this file, you do not have to split training set to training 
+In this file, you do not have to split training set to training
 and validation or draw curves. The training and evaluation functions
-are already written for successful logs, please do not change them. 
+are already written for successful logs, please do not change them.
 Please also do not copy the functions.
 
 -------------------------------------------
@@ -90,7 +90,8 @@ def create_logger(final_output_path):
 # for the convenience of marking. DO NOT CHANGE THIS PART.
 def train_net(net, trainloader, logging, criterion, optimizer, scheduler, epochs=1):
     net = net.train()
-    for epoch in range(epochs):  # loop over the dataset multiple times, only 1 time by default
+    for epoch in range(epochs):
+        # loop over the dataset multiple times, only 1 time by default
 
         if type(scheduler).__name__ != 'NoneType':
             scheduler.step()
@@ -185,7 +186,7 @@ train_transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-test_transform = transforms.ToTensor()
+test_transform = train_transform
 
 ####################################
 
@@ -221,18 +222,20 @@ class Baseline(nn.Module):
 
         # nn.Conv2d(input_channel, output_channel, filter_size,
         #     stride=stride, padding=padding)
+        # By default, padding=0, stride=1
         # CIFAR 10 is 32*32*3
         # Pooling Method, Kernel size, dropout and activation method shall not be experimented with.
-        self.conv1 = nn.Conv2d(3,?,5)
+
+        self.conv1 = nn.Conv2d(3,6,5)
         self.pool1 = nn.MaxPool2d(2,2)
-        self.conv2 = nn.Conv2d(?,?,5)
+        self.conv2 = nn.Conv2d(6, 16, 5)
         self.pool2 = nn.MaxPool2d(2,2)
-        self.conv3 = nn.Conv2d(?,?,5)
+        self.conv3 = nn.Conv2d(16, 32, 5)
         self.pool3 = nn.MaxPool2d(2,2)
 
-        self.fc1 = nn.Linear(?,?)
-        self.fc2 = nn.Linear(?,?)
-        self.fc3 = nn.Linear(?,10)
+        self.fc1 = nn.Linear(32,32)
+        self.fc2 = nn.Linear(32,32)
+        self.fc3 = nn.Linear(32,10)
 
     def forward(self, x):
         # define the network structure
@@ -241,7 +244,7 @@ class Baseline(nn.Module):
         x = self.pool3(F.relu(self.conv3(x)))
 
         # Reshape
-        x = x.view(-1,?)
+        x = x.view(-1,32)
 
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -256,13 +259,46 @@ class Baseline(nn.Module):
 # NOTE:
 # define your modified network that will generate the best results
 
+I_C = 16
+DL_C = 1024
+
 class Modified(nn.Module):
     def __init__(self):
         super(Modified, self).__init__()
         # define the network layers
 
+        # nn.Conv2d(input_channel, output_channel, filter_size,
+        #     stride=stride, padding=padding)
+        # By default, padding=0, stride=1
+        # CIFAR 10 is 32*32*3
+        # Pooling Method, Kernel size, dropout and activation method shall not be experimented with.
+
+        self.conv1 = nn.Conv2d(3,I_C,5)
+        self.pool1 = nn.MaxPool2d(2,2)
+        self.conv2 = nn.Conv2d(I_C, I_C*4, 5)
+        self.pool2 = nn.MaxPool2d(2,2)
+        self.conv3 = nn.Conv2d(I_C*4, I_C*4*4, 5)
+        self.pool3 = nn.MaxPool2d(2,2)
+
+        self.fc1 = nn.Linear(I_C*4*4,DL_C)
+        self.fc2 = nn.Linear(DL_C,DL_C)
+        self.fc3 = nn.Linear(DL_C,10)
+
     def forward(self, x):
         # define the network structure
+        x = self.pool1(F.relu(self.conv1(x)))
+        x = self.pool2(F.relu(self.conv2(x)))
+        x = self.pool3(F.relu(self.conv3(x)))
+
+        # Reshape
+        x = x.view(-1,I_C*4*4)
+
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+
+        return x
+
 
 ####################################
 
@@ -282,8 +318,15 @@ if args.cuda:
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(modified.parameters(), lr=0.001, momentum=0.9) # adjust optimizer settings
-lbda = lambda epoch : epoch * 0.99
-scheduler = optim.LambdaLR(optimizer, lbda)
+
+def manual_plateau(epoch):
+    if epoch + 1 >= 10:
+      return 0.1**2
+    if epoch + 1 >= 5:
+      return 0.1
+    return 1
+
+scheduler = optim.lr_scheduler.LambdaLR(optimizer, [manual_plateau])
 ####################################
 
 # ==================================
